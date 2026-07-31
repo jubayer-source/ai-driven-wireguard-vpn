@@ -63,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
                 if (result.getResultCode() == Activity.RESULT_OK) {
                     startVpn();
                 } else {
-                    resetUi("SYSTEM READY");
+                    resetUi("SYSTEM ARMED");
                 }
             }
     );
@@ -87,8 +87,12 @@ public class MainActivity extends AppCompatActivity {
 
         aiOrchestrator = new GeminiNetworkOrchestrator();
 
-        // Preset Node IP for Hotspot Gateway Target
-        etServerIp.setText(DEFAULT_HOTSPOT_PUBLIC_IP);
+        // Preset Node IP for testing
+        etServerIp.setText(DEFAULT_LOCAL_LAN_IP);
+
+        // Lottie সবসময় চালুর ব্যবস্থা (আইডল গতিতে)
+        lottieScan.setSpeed(0.8f);
+        lottieScan.playAnimation();
 
         etServerIp.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -138,10 +142,15 @@ public class MainActivity extends AppCompatActivity {
         }
 
         btnToggleVpn.setEnabled(false);
-        lottieScan.setSpeed(2.5f);
-        lottieScan.playAnimation();
+
+        // স্ক্যান করার সময় এনিমেশনের গতি বাড়িয়ে দ্রুত করা
+        lottieScan.setSpeed(2.2f);
+        if (!lottieScan.isAnimating()) {
+            lottieScan.playAnimation();
+        }
+
         tvStatus.setText("AEGIS INTELLIGENCE SCAN...");
-        tvStatus.setTextColor(Color.parseColor("#00D2FF"));
+        tvStatus.setTextColor(Color.parseColor("#00E5FF"));
 
         new Thread(() -> {
             NetworkAnalyzer.Metrics metrics = NetworkAnalyzer.getLiveMetrics(this);
@@ -155,7 +164,6 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onResult(boolean connect, String reason, int confidence) {
                     handler.post(() -> {
-                        lottieScan.setSpeed(1.0f);
                         tvAiReason.setText(reason);
                         if (connect) prepareVpn();
                         else resetUi("SYSTEM ARMED");
@@ -180,7 +188,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startVpn() {
-        String targetIp = DEFAULT_HOTSPOT_PUBLIC_IP;
+        String targetIp = DEFAULT_LOCAL_LAN_IP;
         if (etServerIp != null && etServerIp.getText() != null) {
             String input = etServerIp.getText().toString().trim();
             if (!input.isEmpty()) targetIp = input;
@@ -196,7 +204,13 @@ public class MainActivity extends AppCompatActivity {
         ContextCompat.startForegroundService(this, intent);
 
         isVpnActive = true;
-        lottieScan.pauseAnimation();
+
+        // ভিপিএন এক্টিভ থাকলে এনিমেশন মাঝারি গতিতে ঘুরতে থাকবে
+        lottieScan.setSpeed(1.2f);
+        if (!lottieScan.isAnimating()) {
+            lottieScan.playAnimation();
+        }
+
         tvStatus.setText("PROTECTION ACTIVE");
         tvStatus.setTextColor(Color.parseColor("#00E676"));
         tvTimer.setVisibility(View.VISIBLE);
@@ -218,12 +232,12 @@ public class MainActivity extends AppCompatActivity {
             tvVpnIp.setText("Unreachable Route");
             tvVpnIp.setTextColor(Color.parseColor("#FF5252"));
             tvLocation.setText("Routing Failure");
-            Toast.makeText(this, "Tunnel established but internet unreachable. Check Server NAT/UFW setup.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Tunnel established but internet unreachable. Check Server NAT setup.", Toast.LENGTH_LONG).show();
             return;
         }
 
         tvVpnIp.setText("Verifying Route...");
-        tvVpnIp.setTextColor(Color.parseColor("#00D2FF"));
+        tvVpnIp.setTextColor(Color.parseColor("#00E5FF"));
 
         handler.postDelayed(() -> new Thread(() -> {
             String fetchedIp = NetworkAnalyzer.fetchPublicIp();
@@ -232,11 +246,6 @@ public class MainActivity extends AppCompatActivity {
                     tvVpnIp.setText(fetchedIp);
                     tvVpnIp.setTextColor(Color.parseColor("#00E676"));
                     tvLocation.setText("Aegis Secure Node (" + currentIp + ")");
-
-                    // If fetched IP matches Hotspot Node IP 42.0.7.221, verification successful
-                    if (DEFAULT_HOTSPOT_PUBLIC_IP.equals(fetchedIp)) {
-                        Toast.makeText(MainActivity.this, "Encrypted Tunnel Verified! Public IP: " + fetchedIp, Toast.LENGTH_SHORT).show();
-                    }
                 } else {
                     pollVpnIp(attempt + 1, currentIp);
                 }
@@ -250,18 +259,24 @@ public class MainActivity extends AppCompatActivity {
         tvTimer.setVisibility(View.GONE);
         tvVpnIp.setText("Inactive");
         tvVpnIp.setTextColor(Color.parseColor("#80FFFFFF"));
-        tvLocation.setText("Local Gateway");
-        resetUi("SYSTEM READY");
+        tvLocation.setText("Local Subnet Direct");
+        resetUi("SYSTEM ARMED");
         refreshTelemetry();
     }
 
     private void resetUi(String status) {
         isVpnActive = false;
-        lottieScan.pauseAnimation();
+
+        // ভিপিএন বন্ধ হলেও এনিমেশন শান্ত গতিতে ঘুরবে
+        lottieScan.setSpeed(0.8f);
+        if (!lottieScan.isAnimating()) {
+            lottieScan.playAnimation();
+        }
+
         tvStatus.setText(status);
         tvStatus.setTextColor(Color.parseColor("#FFFFFF"));
         btnToggleVpn.setText("SECURE CONNECTION");
-        btnToggleVpn.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#00D2FF")));
+        btnToggleVpn.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#00E5FF")));
         btnToggleVpn.setEnabled(true);
     }
 
