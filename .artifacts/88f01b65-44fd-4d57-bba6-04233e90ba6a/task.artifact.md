@@ -1,0 +1,6 @@
+- [x] Update `MainActivity.java` with correct Public IP
+- [x] Implement App Exclusion in `MyVpnService.java` (Verified configuration)
+- [x] Optimize DNS and Routing in `MyVpnService.java`
+- [x] Improve Reliability in `NetworkAnalyzer.java`
+- [x] Verify build and code consistency
+- [x] Final summary and walkthrough

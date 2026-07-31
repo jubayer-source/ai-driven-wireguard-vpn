@@ -27,7 +27,8 @@ import com.airbnb.lottie.LottieAnimationView;
 import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String SERVER_IP = "163.47.36.234";
+    private static final String SERVER_IP = "192.168.50.252";
+    private static final int SERVER_PORT = 443;
 
     private TextView tvStatus, tvAiReason, tvPingVal, tvNetworkVal, tvRealIp, tvVpnIp, tvLocation, tvTimer;
     private Button btnToggleVpn;
@@ -80,7 +81,6 @@ public class MainActivity extends AppCompatActivity {
             else runSmartScan();
         });
 
-        // Add scan trigger on lottie for reliability
         lottieScan.setOnClickListener(v -> {
             if (!isVpnActive && btnToggleVpn.isEnabled()) runSmartScan();
         });
@@ -91,10 +91,18 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (VpnService.prepare(this) != null && isVpnActive) {
+        syncVpnState();
+        refreshTelemetry();
+    }
+
+    private void syncVpnState() {
+        // System check to see if our service is actually active
+        if (VpnService.prepare(this) == null && isVpnActive) {
+            // Already authorized and we have active state internally
+        } else if (VpnService.prepare(this) != null && isVpnActive) {
+            // Service was likely stopped by OS or user
             stopVpn();
         }
-        refreshTelemetry();
     }
 
     private void refreshTelemetry() {
@@ -119,12 +127,11 @@ public class MainActivity extends AppCompatActivity {
         btnToggleVpn.setEnabled(false);
         lottieScan.setSpeed(2.5f);
         lottieScan.playAnimation();
-        tvStatus.setText("AI ANALYSIS IN PROGRESS");
+        tvStatus.setText("AEGIS INTELLIGENCE SCAN...");
         tvStatus.setTextColor(Color.parseColor("#00D2FF"));
 
         new Thread(() -> {
             NetworkAnalyzer.Metrics metrics = NetworkAnalyzer.getLiveMetrics(this);
-            
             handler.post(() -> {
                 tvPingVal.setText(metrics.pingMs + " ms");
                 tvNetworkVal.setText(metrics.networkName);
@@ -137,20 +144,16 @@ public class MainActivity extends AppCompatActivity {
                     handler.post(() -> {
                         lottieScan.setSpeed(1.0f);
                         tvAiReason.setText(reason);
-                        if (connect) {
-                            prepareVpn();
-                        } else {
-                            resetUi("SHIELD STANDBY");
-                            Toast.makeText(MainActivity.this, "AI: Network Secure. Shield in Standby.", Toast.LENGTH_SHORT).show();
-                        }
+                        if (connect) prepareVpn();
+                        else resetUi("SYSTEM ARMED");
                     });
                 }
 
                 @Override
                 public void onError(String error) {
                     handler.post(() -> {
-                        resetUi("LOCAL FALLBACK ACTIVE");
-                        tvAiReason.setText(error);
+                        resetUi("OFFLINE PROTECT");
+                        tvAiReason.setText("Analysis Error: " + error);
                     });
                 }
             });
@@ -166,6 +169,7 @@ public class MainActivity extends AppCompatActivity {
     private void startVpn() {
         Intent intent = new Intent(this, MyVpnService.class);
         intent.putExtra("TARGET_SERVER_IP", SERVER_IP);
+        intent.putExtra("TARGET_SERVER_PORT", SERVER_PORT);
         ContextCompat.startForegroundService(this, intent);
         
         isVpnActive = true;
@@ -180,16 +184,16 @@ public class MainActivity extends AppCompatActivity {
         btnToggleVpn.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF5252")));
         btnToggleVpn.setEnabled(true);
 
-        // Start polling loop to fetch verified VPN IP
         pollVpnIp(1);
     }
 
     private void pollVpnIp(int attempt) {
-        if (!isVpnActive || attempt > 5) {
-            if (attempt > 5 && "Resolving...".equals(tvVpnIp.getText().toString())) {
-                tvVpnIp.setText("Protected (Tunnel Active)");
-                tvVpnIp.setTextColor(Color.parseColor("#00E676"));
-                tvLocation.setText("Aegis Secure Node");
+        if (!isVpnActive || attempt > 6) {
+            if (attempt > 6 && "Resolving...".equals(tvVpnIp.getText().toString())) {
+                tvVpnIp.setText("Handshake Failed");
+                tvVpnIp.setTextColor(Color.parseColor("#FF5252"));
+                tvLocation.setText("Routing Error");
+                Toast.makeText(this, "Tunnel Active but No Internet. Check Server NAT.", Toast.LENGTH_LONG).show();
             }
             return;
         }
@@ -198,10 +202,10 @@ public class MainActivity extends AppCompatActivity {
         handler.postDelayed(() -> new Thread(() -> {
             NetworkAnalyzer.Metrics m = NetworkAnalyzer.getLiveMetrics(this);
             handler.post(() -> {
-                if (m.publicIp != null && !m.publicIp.contains("Checking") && !m.publicIp.equals("Unresolved")) {
+                if (m.publicIp != null && !m.publicIp.equals("Unresolved")) {
                     tvVpnIp.setText(m.publicIp);
                     tvVpnIp.setTextColor(Color.parseColor("#00E676"));
-                    tvLocation.setText("Aegis Secure Node");
+                    tvLocation.setText("Aegis Secure Node (" + SERVER_IP + ")");
                     tvPingVal.setText(m.pingMs + " ms");
                 } else {
                     pollVpnIp(attempt + 1);
@@ -237,7 +241,7 @@ public class MainActivity extends AppCompatActivity {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 runSmartScan();
             } else {
-                Toast.makeText(this, "Permissions required for telemetry", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Permissions required for orchestration", Toast.LENGTH_LONG).show();
             }
         }
     }

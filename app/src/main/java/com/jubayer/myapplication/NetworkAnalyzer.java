@@ -24,24 +24,28 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 /**
- * Advanced Network Telemetry for Aegis Sentinel Thesis.
- * Fixed: Carrier detection, 4.5G (LTE-A) display, and robust IP fetching.
+ * Advanced Network Telemetry Engine for Aegis Sentinel Thesis.
+ * Provides multi-layer connection analysis for AI orchestration.
  */
 public class NetworkAnalyzer {
     private static final String TAG = "NetworkAnalyzer";
     
     private static final OkHttpClient client = new OkHttpClient.Builder()
-            .connectTimeout(12, TimeUnit.SECONDS)
-            .readTimeout(12, TimeUnit.SECONDS)
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
+            .writeTimeout(5, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .build();
 
     public static class Metrics {
         public int pingMs;
+        public int signalStrength; // -100 to 0 (dBm) or 0-4 (level)
         public String connectionType;
         public String ssid;
         public String networkName;
         public String publicIp;
         public boolean isSecure;
+        public String securityType;
     }
 
     public static Metrics getLiveMetrics(Context context) {
@@ -49,18 +53,23 @@ public class NetworkAnalyzer {
         metrics.connectionType = getConnectionType(context);
         
         if ("WIFI".equals(metrics.connectionType)) {
+            WifiManager wifiManager = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            WifiInfo info = wifiManager.getConnectionInfo();
             metrics.ssid = getWifiSSID(context);
             metrics.networkName = "Wi-Fi: " + metrics.ssid;
-            metrics.isSecure = isWifiSecure(context);
+            metrics.signalStrength = info != null ? info.getRssi() : -100;
+            metrics.securityType = getWifiSecurityType(info);
+            metrics.isSecure = !"OPEN".equals(metrics.securityType);
         } else if ("CELLULAR".equals(metrics.connectionType)) {
-            String carrier = getActiveDataCarrierName(context);
-            String type = getCellularType(context);
-            metrics.networkName = carrier + " (" + type + ")";
-            metrics.isSecure = true;
+            metrics.networkName = getActiveDataCarrierName(context) + " (" + getCellularType(context) + ")";
+            metrics.signalStrength = -80; // Placeholder as Telephony signal requires complex listeners
+            metrics.isSecure = true; 
             metrics.ssid = "N/A";
+            metrics.securityType = "LTE-A Encryption";
         } else {
             metrics.networkName = "Offline";
             metrics.ssid = "N/A";
+            metrics.signalStrength = -100;
         }
 
         metrics.pingMs = measureHttpLatency();
@@ -86,7 +95,6 @@ public class NetworkAnalyzer {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
             return "Mobile Data";
         }
-
         try {
             SubscriptionManager sm = (SubscriptionManager) context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
             if (sm != null) {
@@ -102,28 +110,29 @@ public class NetworkAnalyzer {
                     }
                 }
             }
-            
             TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
-            if (tm != null) {
-                String operatorName = tm.getNetworkOperatorName();
-                if (operatorName != null && !operatorName.isEmpty()) return operatorName;
-            }
+            return tm != null ? tm.getNetworkOperatorName() : "Carrier";
         } catch (Exception e) {
-            Log.e(TAG, "Carrier detection error: " + e.getMessage());
+            return "Mobile Data";
         }
-        return "Mobile Data";
     }
 
     private static String getWifiSSID(Context context) {
         WifiManager wifiManager = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        if (wifiManager == null) return "Connected";
+        if (wifiManager == null) return "Unknown";
         WifiInfo info = wifiManager.getConnectionInfo();
-        String ssid = (info != null) ? info.getSSID() : "Connected";
-        if (ssid == null || ssid.isEmpty() || ssid.contains("unknown ssid")) {
-            return "Wi-Fi Network";
-        }
+        String ssid = (info != null) ? info.getSSID() : "Unknown";
+        if (ssid == null || ssid.isEmpty() || ssid.contains("unknown ssid")) return "Private Link";
         if (ssid.startsWith("\"") && ssid.endsWith("\"")) ssid = ssid.substring(1, ssid.length() - 1);
         return ssid;
+    }
+
+    private static String getWifiSecurityType(WifiInfo info) {
+        // Mocked logic as real security type requires ScanResult access
+        if (info == null) return "Unknown";
+        String ssid = info.getSSID().toLowerCase();
+        if (ssid.contains("open") || ssid.contains("free")) return "OPEN";
+        return "WPA2/WPA3";
     }
 
     private static String getCellularType(Context context) {
@@ -132,19 +141,11 @@ public class NetworkAnalyzer {
         }
         TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
         if (tm == null) return "LTE";
-        
         try {
             int networkType = tm.getDataNetworkType();
-            // Check for LTE-Advanced (4.5G)
-            if (networkType == TelephonyManager.NETWORK_TYPE_LTE) {
-                // On many modern Androids, NETWORK_TYPE_LTE covers both 4G and 4.5G. 
-                // We return 4.5G as it's the standard for modern LTE deployments like Banglalink.
-                return "4.5G"; 
-            }
             switch (networkType) {
+                case TelephonyManager.NETWORK_TYPE_LTE: return "4.5G";
                 case TelephonyManager.NETWORK_TYPE_NR: return "5G";
-                case TelephonyManager.NETWORK_TYPE_HSPAP:
-                case TelephonyManager.NETWORK_TYPE_HSPA: return "3G+";
                 default: return "4G";
             }
         } catch (Exception e) {
@@ -152,32 +153,25 @@ public class NetworkAnalyzer {
         }
     }
 
-    private static boolean isWifiSecure(Context context) {
-        String ssid = getWifiSSID(context).toLowerCase();
-        return !ssid.contains("open") && !ssid.contains("free") && !ssid.contains("public");
-    }
-
     private static String fetchPublicIp() {
-        String[] services = {
-            "https://ifconfig.me/ip",
-            "https://api.ipify.org",
-            "https://icanhazip.com"
-        };
-
+        String[] services = {"https://api.ipify.org", "https://ifconfig.me/ip", "https://icanhazip.com"};
         for (String url : services) {
             try {
-                Request request = new Request.Builder().url(url).build();
+                Request request = new Request.Builder()
+                        .url(url)
+                        .header("User-Agent", "AegisSentinel/1.0")
+                        .build();
                 try (Response response = client.newCall(request).execute()) {
                     if (response.isSuccessful() && response.body() != null) {
                         String ip = response.body().string().trim();
-                        if (!ip.isEmpty() && ip.length() < 45) return ip;
+                        if (!ip.isEmpty() && ip.contains(".") && ip.length() < 45) return ip;
                     }
                 }
-            } catch (IOException e) {
-                Log.w(TAG, "Fetch failed for " + url);
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to fetch IP from " + url + ": " + e.getMessage());
             }
         }
-        return "Checking...";
+        return "Unresolved";
     }
 
     private static int measureHttpLatency() {
@@ -185,13 +179,9 @@ public class NetworkAnalyzer {
         try {
             Request request = new Request.Builder().url("https://www.google.com/generate_204").build();
             try (Response response = client.newCall(request).execute()) {
-                if (response.isSuccessful()) {
-                    return (int) (System.currentTimeMillis() - start);
-                }
+                if (response.isSuccessful()) return (int) (System.currentTimeMillis() - start);
             }
-        } catch (IOException e) {
-            Log.e(TAG, "Latency error");
-        }
+        } catch (IOException ignored) {}
         return 999;
     }
 }
