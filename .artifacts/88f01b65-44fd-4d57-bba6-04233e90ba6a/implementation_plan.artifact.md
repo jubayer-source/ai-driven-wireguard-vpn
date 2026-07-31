@@ -1,38 +1,26 @@
-# Server-Client Alignment Plan (The Final Fix)
+# VPN Handshake and Internet Restoration Plan (Final Iteration)
 
-The issue is that `sudo wg show` is empty, meaning the WireGuard interface on your Ubuntu server is **not running**. Even if the app is perfect, it has nothing to connect to. Additionally, the cryptographic keys in the app must match the keys on your server.
+The goal is to fix the "Handshake Failed" loop and ensure internet connectivity works perfectly when the VPN is active.
 
-## User Action Required (CRITICAL)
+## User Review Required
 
-You must set up the server to match the app's keys. Run these commands on your Ubuntu terminal:
-
-### 1. Create the Server Config
-Run this command to create a config that matches the app's hardcoded credentials:
-```bash
-sudo tee /etc/wireguard/wg0.conf <<EOF
-[Interface]
-PrivateKey = (YOUR_SERVER_PRIVATE_KEY)
-Address = 10.0.0.1/24
-ListenPort = 443
-
-[Peer]
-# Client (The Phone)
-PublicKey = dYJpM3P6YhJ9/Nl6L/fN8YQ4K1/V/ZJt3ZUKRfEuEgk=
-AllowedIPs = 10.0.0.2/32
-EOF
-```
 > [!IMPORTANT]
-> **Wait!** I don't know your server's private key.
-> To make this easy, I will generate a NEW set of keys for both the server and the phone so they are guaranteed to match.
+> **Why it fails now:** The app is currently "excluded" from the VPN. This means the app cannot reach `10.0.0.1` or see the "VPN IP". I will re-include the app but fix the "No Internet" issue properly this time.
 
 ## Proposed Changes
 
-### 1. Re-generate and Sync Keys
-I will update `MyVpnService.java` with a fresh, known-good set of keys. I will then give you the EXACT config to paste into your Ubuntu server.
+### 1. Re-include App and Fix DNS (`MyVpnService.java`)
+- **Action:** Remove `.excludeApplication(getPackageName())`.
+- **Action:** Add `8.8.8.8` and `1.1.1.1` as DNS servers.
+- **Action:** Increase MTU to `1420` (default) since we are on a hotspot (Wi-Fi) which handles larger packets better than cellular.
 
-### 2. Verify Server Status
-I will add more detailed logging to `MyVpnService.java` to distinguish between "Network Timeout" and "Crypto Mismatch".
+### 2. Reliable Success Detection (`MainActivity.java`)
+- **Action:** Update the success check to fetch the public IP *through* the tunnel.
+- **Action:** If the first IP check fails, it will wait 2 more seconds for the handshake to finish before giving up.
+
+### 3. Server NAT Check
+- **Action:** I will provide a final "Clean NAT" command for your Ubuntu server to ensure no old rules are blocking the traffic.
 
 ## Verification Plan
-1. **Ubuntu:** Run `sudo wg-quick up wg0`. Then `sudo wg show`. It must show "listening on 443".
-2. **Android:** Connect. If keys match and NAT is on, internet will work.
+1. **Hotspot:** Connect and verify "VPN IP" matches your server.
+2. **Internet:** Open a browser and verify you can load Google.

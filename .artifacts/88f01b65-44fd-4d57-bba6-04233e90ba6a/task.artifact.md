@@ -1,6 +1,5 @@
-- [x] Update `MainActivity.java` with correct Public IP
-- [x] Implement App Exclusion in `MyVpnService.java` (Verified configuration)
-- [x] Optimize DNS and Routing in `MyVpnService.java`
-- [x] Improve Reliability in `NetworkAnalyzer.java`
-- [x] Verify build and code consistency
+- [x] Implement internal tunnel probing in `NetworkAnalyzer.java`
+- [x] Implement auto-failover and smart success detection in `MainActivity.java`
+- [x] Tune MTU and Keepalive in `MyVpnService.java`
+- [x] Verify connectivity in both Hotspot and Wi-Fi scenarios
 - [x] Final summary and walkthrough

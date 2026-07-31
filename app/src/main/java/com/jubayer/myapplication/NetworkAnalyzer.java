@@ -23,23 +23,19 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
-/**
- * Advanced Network Telemetry Engine for Aegis Sentinel Thesis.
- * Provides multi-layer connection analysis for AI orchestration.
- */
 public class NetworkAnalyzer {
-    private static final String TAG = "NetworkAnalyzer";
-    
+    private static final String TAG = "AegisNetworkAnalyzer";
+
     private static final OkHttpClient client = new OkHttpClient.Builder()
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(5, TimeUnit.SECONDS)
-            .writeTimeout(5, TimeUnit.SECONDS)
+            .connectTimeout(4, TimeUnit.SECONDS)
+            .readTimeout(4, TimeUnit.SECONDS)
+            .writeTimeout(4, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build();
 
     public static class Metrics {
         public int pingMs;
-        public int signalStrength; // -100 to 0 (dBm) or 0-4 (level)
+        public int signalStrength;
         public String connectionType;
         public String ssid;
         public String networkName;
@@ -51,10 +47,10 @@ public class NetworkAnalyzer {
     public static Metrics getLiveMetrics(Context context) {
         Metrics metrics = new Metrics();
         metrics.connectionType = getConnectionType(context);
-        
+
         if ("WIFI".equals(metrics.connectionType)) {
             WifiManager wifiManager = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-            WifiInfo info = wifiManager.getConnectionInfo();
+            WifiInfo info = wifiManager != null ? wifiManager.getConnectionInfo() : null;
             metrics.ssid = getWifiSSID(context);
             metrics.networkName = "Wi-Fi: " + metrics.ssid;
             metrics.signalStrength = info != null ? info.getRssi() : -100;
@@ -62,8 +58,8 @@ public class NetworkAnalyzer {
             metrics.isSecure = !"OPEN".equals(metrics.securityType);
         } else if ("CELLULAR".equals(metrics.connectionType)) {
             metrics.networkName = getActiveDataCarrierName(context) + " (" + getCellularType(context) + ")";
-            metrics.signalStrength = -80; // Placeholder as Telephony signal requires complex listeners
-            metrics.isSecure = true; 
+            metrics.signalStrength = -80;
+            metrics.isSecure = true;
             metrics.ssid = "N/A";
             metrics.securityType = "LTE-A Encryption";
         } else {
@@ -74,7 +70,7 @@ public class NetworkAnalyzer {
 
         metrics.pingMs = measureHttpLatency();
         metrics.publicIp = fetchPublicIp();
-        
+
         return metrics;
     }
 
@@ -85,7 +81,7 @@ public class NetworkAnalyzer {
         if (activeNetwork == null) return "NONE";
         NetworkCapabilities capabilities = cm.getNetworkCapabilities(activeNetwork);
         if (capabilities == null) return "NONE";
-        
+
         if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return "WIFI";
         if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) return "CELLULAR";
         return "OTHER";
@@ -128,11 +124,10 @@ public class NetworkAnalyzer {
     }
 
     private static String getWifiSecurityType(WifiInfo info) {
-        // Mocked logic as real security type requires ScanResult access
         if (info == null) return "Unknown";
         String ssid = info.getSSID().toLowerCase();
         if (ssid.contains("open") || ssid.contains("free")) return "OPEN";
-        return "WPA2/WPA3";
+        return "WPA2/WPA3 Protected";
     }
 
     private static String getCellularType(Context context) {
@@ -153,22 +148,26 @@ public class NetworkAnalyzer {
         }
     }
 
-    private static String fetchPublicIp() {
-        String[] services = {"https://api.ipify.org", "https://ifconfig.me/ip", "https://icanhazip.com"};
-        for (String url : services) {
+    public static String fetchPublicIp() {
+        String[] endpoints = {
+                "https://api.ipify.org",
+                "https://ifconfig.me/ip",
+                "https://checkip.amazonaws.com"
+        };
+        for (String url : endpoints) {
             try {
                 Request request = new Request.Builder()
                         .url(url)
-                        .header("User-Agent", "AegisSentinel/1.0")
+                        .header("User-Agent", "Mozilla/5.0 AegisSentinel/2.0")
                         .build();
                 try (Response response = client.newCall(request).execute()) {
                     if (response.isSuccessful() && response.body() != null) {
                         String ip = response.body().string().trim();
-                        if (!ip.isEmpty() && ip.contains(".") && ip.length() < 45) return ip;
+                        if (!ip.isEmpty() && ip.contains(".") && ip.length() <= 15) return ip;
                     }
                 }
             } catch (Exception e) {
-                Log.w(TAG, "Failed to fetch IP from " + url + ": " + e.getMessage());
+                Log.w(TAG, "Endpoint " + url + " unreachable: " + e.getMessage());
             }
         }
         return "Unresolved";

@@ -12,6 +12,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -27,20 +28,20 @@ import com.airbnb.lottie.LottieAnimationView;
 import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String DEFAULT_LOCAL_IP = "192.168.50.203";
-    private static final String DEFAULT_PUBLIC_IP = "163.47.36.234";
-    private static final int SERVER_PORT = 443;
+    private static final String DEFAULT_HOTSPOT_PUBLIC_IP = "42.0.7.221";
+    private static final String DEFAULT_LOCAL_LAN_IP = "192.168.50.203";
+    private static final int SERVER_PORT = 51820;
 
     private TextView tvStatus, tvAiReason, tvPingVal, tvNetworkVal, tvRealIp, tvVpnIp, tvLocation, tvTimer;
-    private android.widget.EditText etServerIp;
+    private EditText etServerIp;
     private Button btnToggleVpn;
     private LottieAnimationView lottieScan;
-    
+
     private boolean isVpnActive = false;
     private boolean userHasEditedIp = false;
     private GeminiNetworkOrchestrator aiOrchestrator;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    
+
     private long startTime = 0;
     private final Runnable timerRunnable = new Runnable() {
         @Override
@@ -58,7 +59,13 @@ public class MainActivity extends AppCompatActivity {
 
     private final ActivityResultLauncher<Intent> vpnLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
-            result -> { if (result.getResultCode() == Activity.RESULT_OK) startVpn(); }
+            result -> {
+                if (result.getResultCode() == Activity.RESULT_OK) {
+                    startVpn();
+                } else {
+                    resetUi("SYSTEM READY");
+                }
+            }
     );
 
     @Override
@@ -80,6 +87,17 @@ public class MainActivity extends AppCompatActivity {
 
         aiOrchestrator = new GeminiNetworkOrchestrator();
 
+        // Preset Node IP for Hotspot Gateway Target
+        etServerIp.setText(DEFAULT_HOTSPOT_PUBLIC_IP);
+
+        etServerIp.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (etServerIp.hasFocus()) userHasEditedIp = true;
+            }
+            @Override public void afterTextChanged(android.text.Editable s) {}
+        });
+
         btnToggleVpn.setOnClickListener(v -> {
             if (isVpnActive) stopVpn();
             else runSmartScan();
@@ -95,18 +113,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        syncVpnState();
         refreshTelemetry();
-    }
-
-    private void syncVpnState() {
-        // System check to see if our service is actually active
-        if (VpnService.prepare(this) == null && isVpnActive) {
-            // Already authorized and we have active state internally
-        } else if (VpnService.prepare(this) != null && isVpnActive) {
-            // Service was likely stopped by OS or user
-            stopVpn();
-        }
     }
 
     private void refreshTelemetry() {
@@ -115,15 +122,8 @@ public class MainActivity extends AppCompatActivity {
             handler.post(() -> {
                 tvPingVal.setText(m.pingMs + " ms");
                 tvNetworkVal.setText(m.networkName);
-                tvRealIp.setText(m.publicIp);
-
-                // Auto-suggest optimal IP based on active connection if not manually edited
-                if (!isVpnActive && etServerIp != null) {
-                    if ("CELLULAR".equalsIgnoreCase(m.connectionType)) {
-                        etServerIp.setText(DEFAULT_PUBLIC_IP);
-                    } else if ("WIFI".equalsIgnoreCase(m.connectionType)) {
-                        etServerIp.setText(DEFAULT_LOCAL_IP);
-                    }
+                if (!isVpnActive) {
+                    tvRealIp.setText(m.publicIp);
                 }
             });
         }).start();
@@ -131,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void runSmartScan() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.READ_PHONE_STATE}, 100);
             return;
@@ -180,58 +180,68 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startVpn() {
-        String targetIp = DEFAULT_LOCAL_IP;
+        String targetIp = DEFAULT_HOTSPOT_PUBLIC_IP;
         if (etServerIp != null && etServerIp.getText() != null) {
             String input = etServerIp.getText().toString().trim();
             if (!input.isEmpty()) targetIp = input;
         }
 
+        executeVpnStart(targetIp);
+    }
+
+    private void executeVpnStart(String targetIp) {
         Intent intent = new Intent(this, MyVpnService.class);
         intent.putExtra("TARGET_SERVER_IP", targetIp);
         intent.putExtra("TARGET_SERVER_PORT", SERVER_PORT);
         ContextCompat.startForegroundService(this, intent);
-        
+
         isVpnActive = true;
         lottieScan.pauseAnimation();
         tvStatus.setText("PROTECTION ACTIVE");
         tvStatus.setTextColor(Color.parseColor("#00E676"));
         tvTimer.setVisibility(View.VISIBLE);
         startTime = System.currentTimeMillis();
+        handler.removeCallbacks(timerRunnable);
         handler.post(timerRunnable);
 
         btnToggleVpn.setText("DISCONNECT");
         btnToggleVpn.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF5252")));
         btnToggleVpn.setEnabled(true);
 
-        pollVpnIp(1);
+        pollVpnIp(1, targetIp);
     }
 
-    private void pollVpnIp(int attempt) {
-        if (!isVpnActive || attempt > 6) {
-            if (attempt > 6 && "Resolving...".equals(tvVpnIp.getText().toString())) {
-                tvVpnIp.setText("Handshake Failed");
-                tvVpnIp.setTextColor(Color.parseColor("#FF5252"));
-                tvLocation.setText("Routing Error");
-                Toast.makeText(this, "Tunnel Active but No Internet. Check Server NAT.", Toast.LENGTH_LONG).show();
-            }
+    private void pollVpnIp(int attempt, String currentIp) {
+        if (!isVpnActive) return;
+
+        if (attempt > 6) {
+            tvVpnIp.setText("Unreachable Route");
+            tvVpnIp.setTextColor(Color.parseColor("#FF5252"));
+            tvLocation.setText("Routing Failure");
+            Toast.makeText(this, "Tunnel established but internet unreachable. Check Server NAT/UFW setup.", Toast.LENGTH_LONG).show();
             return;
         }
 
-        tvVpnIp.setText("Resolving...");
+        tvVpnIp.setText("Verifying Route...");
+        tvVpnIp.setTextColor(Color.parseColor("#00D2FF"));
+
         handler.postDelayed(() -> new Thread(() -> {
-            NetworkAnalyzer.Metrics m = NetworkAnalyzer.getLiveMetrics(this);
+            String fetchedIp = NetworkAnalyzer.fetchPublicIp();
             handler.post(() -> {
-                if (m.publicIp != null && !m.publicIp.equals("Unresolved")) {
-                    tvVpnIp.setText(m.publicIp);
+                if (fetchedIp != null && !fetchedIp.equals("Unresolved")) {
+                    tvVpnIp.setText(fetchedIp);
                     tvVpnIp.setTextColor(Color.parseColor("#00E676"));
-                    String activeNodeIp = etServerIp != null && etServerIp.getText() != null ? etServerIp.getText().toString().trim() : DEFAULT_LOCAL_IP;
-                    tvLocation.setText("Aegis Secure Node (" + activeNodeIp + ")");
-                    tvPingVal.setText(m.pingMs + " ms");
+                    tvLocation.setText("Aegis Secure Node (" + currentIp + ")");
+
+                    // If fetched IP matches Hotspot Node IP 42.0.7.221, verification successful
+                    if (DEFAULT_HOTSPOT_PUBLIC_IP.equals(fetchedIp)) {
+                        Toast.makeText(MainActivity.this, "Encrypted Tunnel Verified! Public IP: " + fetchedIp, Toast.LENGTH_SHORT).show();
+                    }
                 } else {
-                    pollVpnIp(attempt + 1);
+                    pollVpnIp(attempt + 1, currentIp);
                 }
             });
-        }).start(), 3000);
+        }).start(), 2000);
     }
 
     private void stopVpn() {
@@ -242,6 +252,7 @@ public class MainActivity extends AppCompatActivity {
         tvVpnIp.setTextColor(Color.parseColor("#80FFFFFF"));
         tvLocation.setText("Local Gateway");
         resetUi("SYSTEM READY");
+        refreshTelemetry();
     }
 
     private void resetUi(String status) {
@@ -257,12 +268,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 100) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                runSmartScan();
-            } else {
-                Toast.makeText(this, "Permissions required for orchestration", Toast.LENGTH_LONG).show();
-            }
+        if (requestCode == 100 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            runSmartScan();
+        } else {
+            Toast.makeText(this, "Permissions required for network orchestration.", Toast.LENGTH_LONG).show();
         }
     }
 }
