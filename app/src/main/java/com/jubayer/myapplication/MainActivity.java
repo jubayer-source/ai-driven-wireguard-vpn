@@ -27,14 +27,17 @@ import com.airbnb.lottie.LottieAnimationView;
 import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String SERVER_IP = "192.168.50.252";
+    private static final String DEFAULT_LOCAL_IP = "192.168.50.203";
+    private static final String DEFAULT_PUBLIC_IP = "163.47.36.234";
     private static final int SERVER_PORT = 443;
 
     private TextView tvStatus, tvAiReason, tvPingVal, tvNetworkVal, tvRealIp, tvVpnIp, tvLocation, tvTimer;
+    private android.widget.EditText etServerIp;
     private Button btnToggleVpn;
     private LottieAnimationView lottieScan;
     
     private boolean isVpnActive = false;
+    private boolean userHasEditedIp = false;
     private GeminiNetworkOrchestrator aiOrchestrator;
     private final Handler handler = new Handler(Looper.getMainLooper());
     
@@ -71,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
         tvVpnIp = findViewById(R.id.tvVpnIp);
         tvLocation = findViewById(R.id.tvLocation);
         tvTimer = findViewById(R.id.tvTimer);
+        etServerIp = findViewById(R.id.etServerIp);
         btnToggleVpn = findViewById(R.id.btnToggleVpn);
         lottieScan = findViewById(R.id.lottieScan);
 
@@ -112,6 +116,15 @@ public class MainActivity extends AppCompatActivity {
                 tvPingVal.setText(m.pingMs + " ms");
                 tvNetworkVal.setText(m.networkName);
                 tvRealIp.setText(m.publicIp);
+
+                // Auto-suggest optimal IP based on active connection if not manually edited
+                if (!isVpnActive && etServerIp != null) {
+                    if ("CELLULAR".equalsIgnoreCase(m.connectionType)) {
+                        etServerIp.setText(DEFAULT_PUBLIC_IP);
+                    } else if ("WIFI".equalsIgnoreCase(m.connectionType)) {
+                        etServerIp.setText(DEFAULT_LOCAL_IP);
+                    }
+                }
             });
         }).start();
     }
@@ -167,8 +180,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startVpn() {
+        String targetIp = DEFAULT_LOCAL_IP;
+        if (etServerIp != null && etServerIp.getText() != null) {
+            String input = etServerIp.getText().toString().trim();
+            if (!input.isEmpty()) targetIp = input;
+        }
+
         Intent intent = new Intent(this, MyVpnService.class);
-        intent.putExtra("TARGET_SERVER_IP", SERVER_IP);
+        intent.putExtra("TARGET_SERVER_IP", targetIp);
         intent.putExtra("TARGET_SERVER_PORT", SERVER_PORT);
         ContextCompat.startForegroundService(this, intent);
         
@@ -205,7 +224,8 @@ public class MainActivity extends AppCompatActivity {
                 if (m.publicIp != null && !m.publicIp.equals("Unresolved")) {
                     tvVpnIp.setText(m.publicIp);
                     tvVpnIp.setTextColor(Color.parseColor("#00E676"));
-                    tvLocation.setText("Aegis Secure Node (" + SERVER_IP + ")");
+                    String activeNodeIp = etServerIp != null && etServerIp.getText() != null ? etServerIp.getText().toString().trim() : DEFAULT_LOCAL_IP;
+                    tvLocation.setText("Aegis Secure Node (" + activeNodeIp + ")");
                     tvPingVal.setText(m.pingMs + " ms");
                 } else {
                     pollVpnIp(attempt + 1);
