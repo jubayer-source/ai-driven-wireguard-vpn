@@ -15,8 +15,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -100,6 +102,16 @@ public class MainActivity extends AppCompatActivity {
         etServerIp = findViewById(R.id.etServerIp);
         btnToggleVpn = findViewById(R.id.btnToggleVpn);
         lottieScan = findViewById(R.id.lottieScan);
+
+        LinearLayout serverConfigLayout = findViewById(R.id.serverConfigLayout);
+        if (serverConfigLayout != null) {
+            serverConfigLayout.setOnClickListener(v -> {
+                etServerIp.requestFocus();
+                if (etServerIp.getText() != null) etServerIp.setSelection(etServerIp.getText().length());
+                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showSoftInput(etServerIp, InputMethodManager.SHOW_IMPLICIT);
+            });
+        }
 
         aiOrchestrator = new GeminiNetworkOrchestrator();
 
