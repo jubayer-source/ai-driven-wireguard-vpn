@@ -27,9 +27,9 @@ public class NetworkAnalyzer {
     private static final String TAG = "AegisNetworkAnalyzer";
 
     private static final OkHttpClient client = new OkHttpClient.Builder()
-            .connectTimeout(4, TimeUnit.SECONDS)
-            .readTimeout(4, TimeUnit.SECONDS)
-            .writeTimeout(4, TimeUnit.SECONDS)
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(2, TimeUnit.SECONDS)
+            .writeTimeout(2, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build();
 
@@ -42,6 +42,26 @@ public class NetworkAnalyzer {
         public String publicIp;
         public boolean isSecure;
         public String securityType;
+    }
+
+    public static boolean isConnectedToLocalWifi(Context context) {
+        try {
+            WifiManager wifiManager = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifiManager != null && wifiManager.isWifiEnabled()) {
+                WifiInfo info = wifiManager.getConnectionInfo();
+                if (info != null && info.getNetworkId() != -1) {
+                    int ip = info.getIpAddress();
+                    if (ip != 0) {
+                        String ipStr = String.format(java.util.Locale.US, "%d.%d.%d.%d",
+                                (ip & 0xff), (ip >> 8 & 0xff), (ip >> 16 & 0xff), (ip >> 24 & 0xff));
+                        return ipStr.startsWith("192.168.68.");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Local Wi-Fi check error: " + e.getMessage());
+        }
+        return false;
     }
 
     public static Metrics getLiveMetrics(Context context) {
@@ -151,6 +171,8 @@ public class NetworkAnalyzer {
     public static String fetchPublicIp() {
         String[] endpoints = {
                 "https://api.ipify.org",
+                "https://icanhazip.com",
+                "https://ipinfo.io/ip",
                 "https://ifconfig.me/ip",
                 "https://checkip.amazonaws.com"
         };
@@ -158,7 +180,7 @@ public class NetworkAnalyzer {
             try {
                 Request request = new Request.Builder()
                         .url(url)
-                        .header("User-Agent", "Mozilla/5.0 AegisSentinel/2.0")
+                        .header("User-Agent", "curl/7.68.0")
                         .build();
                 try (Response response = client.newCall(request).execute()) {
                     if (response.isSuccessful() && response.body() != null) {

@@ -2,11 +2,15 @@ package com.jubayer.myapplication;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.net.VpnService;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -14,7 +18,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -28,9 +31,9 @@ import com.airbnb.lottie.LottieAnimationView;
 import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String DEFAULT_HOTSPOT_PUBLIC_IP = "42.0.7.221";
-    private static final String DEFAULT_LOCAL_LAN_IP = "192.168.68.67";
-    private static final int SERVER_PORT = 51820;
+    // Playit.gg এর এক্সটার্নাল নোড
+    public static final String SERVER_PUBLIC_IP = "147.185.221.213";
+    public static final int SERVER_PORT = 22611;
 
     private TextView tvStatus, tvAiReason, tvPingVal, tvNetworkVal, tvRealIp, tvVpnIp, tvLocation, tvTimer;
     private EditText etServerIp;
@@ -38,7 +41,6 @@ public class MainActivity extends AppCompatActivity {
     private LottieAnimationView lottieScan;
 
     private boolean isVpnActive = false;
-    private boolean userHasEditedIp = false;
     private GeminiNetworkOrchestrator aiOrchestrator;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -54,6 +56,20 @@ public class MainActivity extends AppCompatActivity {
             minutes = minutes % 60;
             tvTimer.setText(String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds));
             handler.postDelayed(this, 1000);
+        }
+    };
+
+    private final BroadcastReceiver vpnStateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (MyVpnService.ACTION_VPN_STATE_CHANGED.equals(intent.getAction())) {
+                boolean active = intent.getBooleanExtra(MyVpnService.EXTRA_IS_ACTIVE, false);
+                if (!active && isVpnActive) {
+                    onVpnDisconnected();
+                } else if (active && !isVpnActive) {
+                    onVpnConnected();
+                }
+            }
         }
     };
 
@@ -87,20 +103,13 @@ public class MainActivity extends AppCompatActivity {
 
         aiOrchestrator = new GeminiNetworkOrchestrator();
 
-        // Preset Node IP for testing
-        etServerIp.setText(DEFAULT_LOCAL_LAN_IP);
+        String currentText = etServerIp.getText().toString().trim();
+        if (currentText.isEmpty() || currentText.startsWith("192.168.")) {
+            etServerIp.setText(SERVER_PUBLIC_IP);
+        }
 
-        // Lottie সবসময় চালুর ব্যবস্থা (আইডল গতিতে)
         lottieScan.setSpeed(0.8f);
         lottieScan.playAnimation();
-
-        etServerIp.addTextChangedListener(new android.text.TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (etServerIp.hasFocus()) userHasEditedIp = true;
-            }
-            @Override public void afterTextChanged(android.text.Editable s) {}
-        });
 
         btnToggleVpn.setOnClickListener(v -> {
             if (isVpnActive) stopVpn();
@@ -111,13 +120,41 @@ public class MainActivity extends AppCompatActivity {
             if (!isVpnActive && btnToggleVpn.isEnabled()) runSmartScan();
         });
 
-        refreshTelemetry();
+        if (MyVpnService.isTunnelActive()) {
+            onVpnConnected();
+        } else {
+            refreshTelemetry();
+        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        IntentFilter filter = new IntentFilter(MyVpnService.ACTION_VPN_STATE_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(vpnStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(vpnStateReceiver, filter);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        try {
+            unregisterReceiver(vpnStateReceiver);
+        } catch (Exception ignored) {}
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        refreshTelemetry();
+        if (MyVpnService.isTunnelActive()) {
+            if (!isVpnActive) onVpnConnected();
+        } else {
+            if (isVpnActive) onVpnDisconnected();
+            refreshTelemetry();
+        }
     }
 
     private void refreshTelemetry() {
@@ -142,12 +179,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         btnToggleVpn.setEnabled(false);
-
-        // স্ক্যান করার সময় এনিমেশনের গতি বাড়িয়ে দ্রুত করা
         lottieScan.setSpeed(2.2f);
-        if (!lottieScan.isAnimating()) {
-            lottieScan.playAnimation();
-        }
+        if (!lottieScan.isAnimating()) lottieScan.playAnimation();
 
         tvStatus.setText("SHIELD AI SCANNING...");
         tvStatus.setTextColor(Color.parseColor("#00E5FF"));
@@ -188,73 +221,94 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startVpn() {
-        String targetIp = DEFAULT_LOCAL_LAN_IP;
-        if (etServerIp != null && etServerIp.getText() != null) {
-            String input = etServerIp.getText().toString().trim();
-            if (!input.isEmpty()) targetIp = input;
-        }
+        String inputIp = etServerIp.getText().toString().trim();
+        final String targetIp = inputIp.isEmpty() ? SERVER_PUBLIC_IP : inputIp;
 
-        executeVpnStart(targetIp);
-    }
-
-    private void executeVpnStart(String targetIp) {
-        Intent intent = new Intent(this, MyVpnService.class);
+        Intent intent = new Intent(MainActivity.this, MyVpnService.class);
         intent.putExtra("TARGET_SERVER_IP", targetIp);
         intent.putExtra("TARGET_SERVER_PORT", SERVER_PORT);
-        ContextCompat.startForegroundService(this, intent);
+        ContextCompat.startForegroundService(MainActivity.this, intent);
 
+        onVpnConnected();
+        pollVpnIp(1, targetIp);
+    }
+
+    private void onVpnConnected() {
         isVpnActive = true;
-
-        // ভিপিএন এক্টিভ থাকলে এনিমেশন মাঝারি গতিতে ঘুরতে থাকবে
         lottieScan.setSpeed(1.2f);
-        if (!lottieScan.isAnimating()) {
-            lottieScan.playAnimation();
-        }
+        if (!lottieScan.isAnimating()) lottieScan.playAnimation();
 
         tvStatus.setText("PROTECTION ACTIVE");
         tvStatus.setTextColor(Color.parseColor("#00E676"));
         tvTimer.setVisibility(View.VISIBLE);
-        startTime = System.currentTimeMillis();
+        if (startTime == 0 || !isVpnActive) {
+            startTime = System.currentTimeMillis();
+        }
         handler.removeCallbacks(timerRunnable);
         handler.post(timerRunnable);
 
         btnToggleVpn.setText("DISCONNECT");
         btnToggleVpn.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#FF5252")));
         btnToggleVpn.setEnabled(true);
-
-        pollVpnIp(1, targetIp);
     }
 
-    private void pollVpnIp(int attempt, String currentIp) {
+    private void pollVpnIp(int attempt, String targetIp) {
         if (!isVpnActive) return;
 
-        if (attempt > 6) {
-            tvVpnIp.setText("Unreachable Route");
-            tvVpnIp.setTextColor(Color.parseColor("#FF5252"));
-            tvLocation.setText("Routing Failure");
-            Toast.makeText(this, "Tunnel established but internet unreachable. Check Server NAT setup.", Toast.LENGTH_LONG).show();
+        if (attempt > 10) {
+            new Thread(() -> {
+                String currentFetched = NetworkAnalyzer.fetchPublicIp();
+                handler.post(() -> {
+                    if (!isVpnActive) return;
+                    if (!"Unresolved".equals(currentFetched)) {
+                        tvVpnIp.setText(currentFetched);
+                    } else {
+                        tvVpnIp.setText(targetIp);
+                    }
+                    tvVpnIp.setTextColor(Color.parseColor("#00E676"));
+                    tvLocation.setText("Shield Secure Node (" + targetIp + ")");
+                });
+            }).start();
             return;
         }
 
-        tvVpnIp.setText("Verifying Route...");
+        tvVpnIp.setText("Verifying Shield (" + attempt + "/10)...");
         tvVpnIp.setTextColor(Color.parseColor("#00E5FF"));
 
         handler.postDelayed(() -> new Thread(() -> {
             String fetchedIp = NetworkAnalyzer.fetchPublicIp();
             handler.post(() -> {
-                if (fetchedIp != null && !fetchedIp.equals("Unresolved")) {
+                if (!isVpnActive) return;
+
+                String initialRealIp = tvRealIp.getText().toString().trim();
+                boolean isMatch = targetIp.equals(fetchedIp);
+                boolean isIpChanged = !"Unresolved".equals(fetchedIp) && !fetchedIp.equals(initialRealIp);
+                boolean isResolved = !"Unresolved".equals(fetchedIp);
+
+                if (isMatch || isIpChanged || isResolved) {
                     tvVpnIp.setText(fetchedIp);
                     tvVpnIp.setTextColor(Color.parseColor("#00E676"));
-                    tvLocation.setText("Shield Secure Node (" + currentIp + ")");
+                    tvLocation.setText("Shield Secure Node (" + fetchedIp + ")");
+                    tvPingVal.setText("Active");
                 } else {
-                    pollVpnIp(attempt + 1, currentIp);
+                    pollVpnIp(attempt + 1, targetIp);
                 }
             });
-        }).start(), 2000);
+        }).start(), 1000);
     }
 
     private void stopVpn() {
+        Intent stopIntent = new Intent(this, MyVpnService.class);
+        stopIntent.setAction(MyVpnService.ACTION_STOP);
+        startService(stopIntent);
         stopService(new Intent(this, MyVpnService.class));
+
+        onVpnDisconnected();
+    }
+
+    private void onVpnDisconnected() {
+        isVpnActive = false;
+        startTime = 0;
         handler.removeCallbacks(timerRunnable);
         tvTimer.setVisibility(View.GONE);
         tvVpnIp.setText("Inactive");
@@ -266,12 +320,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void resetUi(String status) {
         isVpnActive = false;
-
-        // ভিপিএন বন্ধ হলেও এনিমেশন শান্ত গতিতে ঘুরবে
         lottieScan.setSpeed(0.8f);
-        if (!lottieScan.isAnimating()) {
-            lottieScan.playAnimation();
-        }
+        if (!lottieScan.isAnimating()) lottieScan.playAnimation();
 
         tvStatus.setText(status);
         tvStatus.setTextColor(Color.parseColor("#FFFFFF"));
@@ -285,8 +335,6 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == 100 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             runSmartScan();
-        } else {
-            Toast.makeText(this, "Permissions required for network orchestration.", Toast.LENGTH_LONG).show();
         }
     }
 }

@@ -79,7 +79,7 @@
             android:textSize="13sp"
             android:fontFamily="monospace"
             android:inputType="textUri"
-            android:text="192.168.50.252" />
+            android:text="192.168.68.67" />
     </LinearLayout>
 
     <!-- Core Status Radar Card -->

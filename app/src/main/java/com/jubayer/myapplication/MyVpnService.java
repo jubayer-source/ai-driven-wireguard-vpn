@@ -27,19 +27,31 @@ public class MyVpnService extends VpnService implements Tunnel {
     private static final String TAG = "ShieldVpnService";
     private static final String CHANNEL_ID = "ShieldNotificationChannel";
     public static final String ACTION_STOP = "com.jubayer.myapplication.STOP_VPN";
+    public static final String ACTION_VPN_STATE_CHANGED = "com.jubayer.myapplication.VPN_STATE_CHANGED";
+    public static final String EXTRA_IS_ACTIVE = "is_active";
 
-    private Backend backend;
+    private static Backend backend;
+    private static State tunnelState = State.DOWN;
+    private static String activeServerIp = "";
 
-    // Ubuntu Server Active WireGuard Credentials
+    // সার্ভার পাবলিক কি (পিসির wg0.conf এর সাথে মিল আছে)
     private static final String SERVER_PUBKEY = "EXaSGFXpcgor5uHcIxGjRMVoOR6uHkqZxY6lPNAUUXM=";
+    
+    // ক্লায়েন্ট প্রাইভেট কি (ফোন)
     private static final String CLIENT_PRIVKEY = "8OlQetLYYyG3XtGtCuz0rdnSXmXR51nb+OqTMj1erlw=";
-    private static final String CLIENT_ADDRESS = "10.0.0.2/24";
-    private static final int DEFAULT_SERVER_PORT = 51820;
+    private static final String CLIENT_ADDRESS = "10.0.0.2/32";
+    public static final int DEFAULT_SERVER_PORT = 22611;
+
+    public static boolean isTunnelActive() {
+        return tunnelState == State.UP;
+    }
 
     @Override
     public void onCreate() {
         super.onCreate();
-        backend = new GoBackend(this);
+        if (backend == null) {
+            backend = new GoBackend(this);
+        }
         createNotificationChannel();
     }
 
@@ -51,29 +63,36 @@ public class MyVpnService extends VpnService implements Tunnel {
         }
 
         String serverIp = (intent != null && intent.getStringExtra("TARGET_SERVER_IP") != null)
-                ? intent.getStringExtra("TARGET_SERVER_IP") : "42.0.7.221";
+                ? intent.getStringExtra("TARGET_SERVER_IP").trim() : MainActivity.SERVER_PUBLIC_IP;
         int serverPort = intent != null ? intent.getIntExtra("TARGET_SERVER_PORT", DEFAULT_SERVER_PORT) : DEFAULT_SERVER_PORT;
+        activeServerIp = serverIp;
 
-        startForeground(1, createNotification());
+        startForeground(1, createNotification(serverIp));
 
         new Thread(() -> {
             try {
-                // Ensure underlying socket setup stabilizes
-                Thread.sleep(300);
+                if (tunnelState == State.UP) {
+                    try {
+                        backend.setState(this, State.DOWN, null);
+                    } catch (Exception ignored) {}
+                }
 
+                // ডিরেক্ট পাবলিক DNS ব্যবহার করা হচ্ছে
                 Interface.Builder ifaceBuilder = new Interface.Builder()
                         .addAddress(InetNetwork.parse(CLIENT_ADDRESS))
                         .parsePrivateKey(CLIENT_PRIVKEY)
                         .addDnsServer(InetAddress.getByName("1.1.1.1"))
                         .addDnsServer(InetAddress.getByName("8.8.8.8"))
-                        .setMtu(1280); 
+                        .setMtu(1280);
+
+                // Endpoint সঠিক ফরম্যাটে হ্যান্ডেল করা
+                String endpointStr = serverIp.contains(":") ? serverIp : (serverIp + ":" + serverPort);
 
                 Peer.Builder peerBuilder = new Peer.Builder()
                         .setPublicKey(Key.fromBase64(SERVER_PUBKEY))
-                        .setEndpoint(InetEndpoint.parse(serverIp + ":" + serverPort))
+                        .setEndpoint(InetEndpoint.parse(endpointStr))
                         .addAllowedIp(InetNetwork.parse("0.0.0.0/0"))
-                        .addAllowedIp(InetNetwork.parse("::/0"))
-                        .setPersistentKeepalive(15); 
+                        .setPersistentKeepalive(25);
 
                 Config config = new Config.Builder()
                         .setInterface(ifaceBuilder.build())
@@ -81,27 +100,49 @@ public class MyVpnService extends VpnService implements Tunnel {
                         .build();
 
                 backend.setState(this, State.UP, config);
-                Log.i(TAG, "WireGuard Tunnel UP on Node Endpoint: " + serverIp + ":" + serverPort);
+                tunnelState = State.UP;
+                Log.i(TAG, "WireGuard Tunnel UP on: " + endpointStr);
+                broadcastState(true);
             } catch (Exception e) {
-                Log.e(TAG, "WireGuard Engine Critical Failure", e);
-                stopSelf();
+                Log.e(TAG, "WireGuard Critical Error starting tunnel", e);
+                stopVpnInternal();
             }
         }).start();
 
         return START_NOT_STICKY;
     }
 
-    private void stopVpnInternal() {
-        new Thread(() -> {
-            try {
+    public synchronized void stopVpnInternal() {
+        if (tunnelState == State.DOWN && backend == null) {
+            stopForeground(true);
+            stopSelf();
+            return;
+        }
+
+        try {
+            if (backend != null) {
                 backend.setState(this, State.DOWN, null);
-            } catch (Exception e) {
-                Log.e(TAG, "Error tearing down tunnel", e);
-            } finally {
-                stopForeground(true);
-                stopSelf();
+                Log.i(TAG, "WireGuard Tunnel DOWN command sent successfully.");
             }
-        }).start();
+        } catch (Exception e) {
+            Log.e(TAG, "Error tearing down tunnel", e);
+        } finally {
+            tunnelState = State.DOWN;
+            broadcastState(false);
+            stopForeground(true);
+            stopSelf();
+        }
+    }
+
+    private void broadcastState(boolean isActive) {
+        try {
+            Intent intent = new Intent(ACTION_VPN_STATE_CHANGED);
+            intent.putExtra(EXTRA_IS_ACTIVE, isActive);
+            intent.setPackage(getPackageName());
+            sendBroadcast(intent);
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending broadcast", e);
+        }
     }
 
     @Override
@@ -111,10 +152,11 @@ public class MyVpnService extends VpnService implements Tunnel {
 
     @Override
     public void onStateChange(State newState) {
-        Log.i(TAG, "Shield Security Tunnel State Changed: " + newState);
+        Log.i(TAG, "Tunnel State: " + newState);
+        tunnelState = newState;
     }
 
-    private Notification createNotification() {
+    private Notification createNotification(String serverIp) {
         Intent stopIntent = new Intent(this, MyVpnService.class);
         stopIntent.setAction(ACTION_STOP);
         PendingIntent stopPendingIntent = PendingIntent.getService(this, 0, stopIntent,
@@ -126,7 +168,7 @@ public class MyVpnService extends VpnService implements Tunnel {
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("SHIELD AI: Active Protection")
-                .setContentText("Traffic encrypted and routed via Secure Node Gateway.")
+                .setContentText("Encrypted Tunnel: " + (serverIp != null ? serverIp : activeServerIp))
                 .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setOngoing(true)
@@ -142,14 +184,24 @@ public class MyVpnService extends VpnService implements Tunnel {
                     "Shield VPN Service",
                     NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Shows active Shield AI encryption status");
             getSystemService(NotificationManager.class).createNotificationChannel(channel);
         }
     }
 
     @Override
     public void onDestroy() {
+        if (tunnelState == State.UP) {
+            try {
+                if (backend != null) {
+                    backend.setState(this, State.DOWN, null);
+                    Log.i(TAG, "WireGuard Tunnel DOWN in onDestroy");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error shutting down backend in onDestroy", e);
+            }
+            tunnelState = State.DOWN;
+            broadcastState(false);
+        }
         super.onDestroy();
-        stopVpnInternal();
     }
 }
