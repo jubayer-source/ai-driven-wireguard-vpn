@@ -89,6 +89,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().hide();
+        }
         setContentView(R.layout.activity_main);
 
         tvStatus = findViewById(R.id.tvStatus);
@@ -102,16 +105,6 @@ public class MainActivity extends AppCompatActivity {
         etServerIp = findViewById(R.id.etServerIp);
         btnToggleVpn = findViewById(R.id.btnToggleVpn);
         lottieScan = findViewById(R.id.lottieScan);
-
-        LinearLayout serverConfigLayout = findViewById(R.id.serverConfigLayout);
-        if (serverConfigLayout != null) {
-            serverConfigLayout.setOnClickListener(v -> {
-                etServerIp.requestFocus();
-                if (etServerIp.getText() != null) etServerIp.setSelection(etServerIp.getText().length());
-                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                if (imm != null) imm.showSoftInput(etServerIp, InputMethodManager.SHOW_IMPLICIT);
-            });
-        }
 
         aiOrchestrator = new GeminiNetworkOrchestrator();
 
@@ -158,15 +151,30 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
     }
 
+    private final Runnable liveTelemetryRunnable = new Runnable() {
+        @Override
+        public void run() {
+            refreshTelemetry();
+            handler.postDelayed(this, 3000);
+        }
+    };
+
     @Override
     protected void onResume() {
         super.onResume();
+        handler.removeCallbacks(liveTelemetryRunnable);
+        handler.post(liveTelemetryRunnable);
         if (MyVpnService.isTunnelActive()) {
             if (!isVpnActive) onVpnConnected();
         } else {
             if (isVpnActive) onVpnDisconnected();
-            refreshTelemetry();
         }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        handler.removeCallbacks(liveTelemetryRunnable);
     }
 
     private void refreshTelemetry() {
@@ -178,6 +186,18 @@ public class MainActivity extends AppCompatActivity {
                 if (!isVpnActive) {
                     tvRealIp.setText(m.publicIp);
                 }
+                aiOrchestrator.analyzeNetworkContext(m, isVpnActive, new GeminiNetworkOrchestrator.GeminiCallback() {
+                    @Override
+                    public void onResult(boolean connect, String reason, int confidence) {
+                        handler.post(() -> {
+                            if (!lottieScan.isAnimating() || isVpnActive) {
+                                tvAiReason.setText(reason);
+                            }
+                        });
+                    }
+                    @Override
+                    public void onError(String error) {}
+                });
             });
         }).start();
     }
@@ -194,7 +214,7 @@ public class MainActivity extends AppCompatActivity {
         lottieScan.setSpeed(2.2f);
         if (!lottieScan.isAnimating()) lottieScan.playAnimation();
 
-        tvStatus.setText("SHIELD AI SCANNING...");
+        tvStatus.setText("VERIFYING SHIELD...");
         tvStatus.setTextColor(Color.parseColor("#00E5FF"));
 
         new Thread(() -> {
@@ -205,7 +225,7 @@ public class MainActivity extends AppCompatActivity {
                 tvRealIp.setText(metrics.publicIp);
             });
 
-            aiOrchestrator.analyzeNetworkContext(metrics, new GeminiNetworkOrchestrator.GeminiCallback() {
+            aiOrchestrator.analyzeNetworkContext(metrics, true, new GeminiNetworkOrchestrator.GeminiCallback() {
                 @Override
                 public void onResult(boolean connect, String reason, int confidence) {
                     handler.post(() -> {

@@ -41,40 +41,47 @@ public class GeminiNetworkOrchestrator {
         this.mainHandler = new Handler(Looper.getMainLooper());
     }
 
-    private void runLocalHeuristics(NetworkAnalyzer.Metrics m, GeminiCallback callback) {
+    private void runLocalHeuristics(NetworkAnalyzer.Metrics m, boolean isVpnActive, GeminiCallback callback) {
         StringBuilder reason = new StringBuilder();
-        int confidence = 96;
+        int confidence = 98;
 
-        if (m.pingMs > 200) {
-            reason.append("High Network Latency (").append(m.pingMs)
-                    .append("ms) detected. Enforcing WireGuard Tunneling for routing optimization.");
-        } else if (!m.isSecure) {
-            reason.append("Unencrypted Public Access Point [").append(m.ssid)
-                    .append("] identified. Enforcing WireGuard ChaCha20 tunnel.");
-        } else if (m.signalStrength < -80) {
-            reason.append("Low Signal-to-Noise Ratio (").append(m.signalStrength)
-                    .append("dBm) poses packet-loss risk. Session persistent tunnel activated.");
+        if (!isVpnActive) {
+            reason.append("Your connection is currently unencrypted. Tap SECURE CONNECTION to protect your network privacy & IP address.");
+        } else if (m.pingMs > 150) {
+            reason.append("Slow connection speed detected (").append(m.pingMs)
+                    .append("ms). Tunnel active to stabilize your latency & optimize routing.");
+        } else if (!m.isSecure && m.ssid != null && !m.ssid.isEmpty()) {
+            reason.append("Connected to public Wi-Fi '").append(m.ssid)
+                    .append("'. Encrypting all internet data to protect your browsing from local network trackers.");
+        } else if (m.signalStrength != 0 && m.signalStrength < -75) {
+            reason.append("Weak signal (").append(m.signalStrength)
+                    .append("dBm). Maintaining persistent tunnel to keep your connection stable.");
+        } else if ("Cellular".equalsIgnoreCase(m.connectionType)) {
+            reason.append("Mobile data active. Encrypting traffic to secure your real IP address & prevent carrier tracking.");
+        } else if (m.pingMs > 0 && m.pingMs <= 100) {
+            reason.append("Fast network detected (").append(m.pingMs)
+                    .append("ms). All your outbound internet traffic is encrypted and fully private.");
         } else {
-            reason.append("Aegis Intelligence Core: Network environment verified clean. Initializing direct cryptographic shield.");
+            reason.append("Your network '").append(m.networkName)
+                    .append("' is secured. Internet traffic is encrypted through WireGuard.");
         }
 
         final String finalReason = reason.toString();
         mainHandler.post(() -> callback.onResult(true, finalReason, confidence));
     }
 
-    public void analyzeNetworkContext(NetworkAnalyzer.Metrics metrics, GeminiCallback callback) {
+    public void analyzeNetworkContext(NetworkAnalyzer.Metrics metrics, boolean isVpnActive, GeminiCallback callback) {
         if (API_KEY.startsWith("AQ.")) {
-            // Using refined Local Intelligence for fast, smooth and crash-free execution
-            runLocalHeuristics(metrics, callback);
+            runLocalHeuristics(metrics, isVpnActive, callback);
             return;
         }
 
         try {
             String prompt = String.format(Locale.US,
-                    "Context: ConnectionType=%s, SSID=%s, Latency=%dms, RSSI=%ddBm, Encrypted=%b. " +
+                    "Context: ConnectionType=%s, SSID=%s, Latency=%dms, RSSI=%ddBm, Encrypted=%b, VpnActive=%b. " +
                             "Task: Perform zero-trust threat analysis. Is WireGuard VPN tunnel required? " +
                             "Respond in JSON ONLY: {\"connect\": boolean, \"reason\": \"string\", \"confidence\": int}",
-                    metrics.connectionType, metrics.ssid, metrics.pingMs, metrics.signalStrength, metrics.isSecure
+                    metrics.connectionType, metrics.ssid, metrics.pingMs, metrics.signalStrength, metrics.isSecure, isVpnActive
             );
 
             JSONObject payload = new JSONObject()
@@ -87,14 +94,14 @@ public class GeminiNetworkOrchestrator {
             client.newCall(request).enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException e) {
-                    runLocalHeuristics(metrics, callback);
+                    runLocalHeuristics(metrics, isVpnActive, callback);
                 }
 
                 @Override
                 public void onResponse(Call call, Response response) throws IOException {
                     try (Response resp = response) {
                         if (!resp.isSuccessful()) {
-                            runLocalHeuristics(metrics, callback);
+                            runLocalHeuristics(metrics, isVpnActive, callback);
                             return;
                         }
                         String bodyStr = resp.body().string();
@@ -107,17 +114,17 @@ public class GeminiNetworkOrchestrator {
                         JSONObject result = new JSONObject(cleanJson);
 
                         boolean connect = result.optBoolean("connect", true);
-                        String reason = "Cyber Sentinel: " + result.optString("reason", "Analysis complete.");
+                        String reason = result.optString("reason", "Analysis complete.");
                         int confidence = result.optInt("confidence", 92);
 
                         mainHandler.post(() -> callback.onResult(connect, reason, confidence));
                     } catch (Exception e) {
-                        runLocalHeuristics(metrics, callback);
+                        runLocalHeuristics(metrics, isVpnActive, callback);
                     }
                 }
             });
         } catch (JSONException e) {
-            runLocalHeuristics(metrics, callback);
+            runLocalHeuristics(metrics, isVpnActive, callback);
         }
     }
 }
