@@ -24,8 +24,8 @@ import com.wireguard.crypto.Key;
 import java.net.InetAddress;
 
 public class MyVpnService extends VpnService implements Tunnel {
-    private static final String TAG = "AegisVpnService";
-    private static final String CHANNEL_ID = "AegisShieldNotificationChannel";
+    private static final String TAG = "ShieldVpnService";
+    private static final String CHANNEL_ID = "ShieldNotificationChannel";
     public static final String ACTION_STOP = "com.jubayer.myapplication.STOP_VPN";
 
     private Backend backend;
@@ -33,7 +33,7 @@ public class MyVpnService extends VpnService implements Tunnel {
     // Ubuntu Server Active WireGuard Credentials
     private static final String SERVER_PUBKEY = "EXaSGFXpcgor5uHcIxGjRMVoOR6uHkqZxY6lPNAUUXM=";
     private static final String CLIENT_PRIVKEY = "8OlQetLYYyG3XtGtCuz0rdnSXmXR51nb+OqTMj1erlw=";
-    private static final String CLIENT_ADDRESS = "10.0.0.2/32";
+    private static final String CLIENT_ADDRESS = "10.0.0.2/24";
     private static final int DEFAULT_SERVER_PORT = 51820;
 
     @Override
@@ -66,14 +66,14 @@ public class MyVpnService extends VpnService implements Tunnel {
                         .parsePrivateKey(CLIENT_PRIVKEY)
                         .addDnsServer(InetAddress.getByName("1.1.1.1"))
                         .addDnsServer(InetAddress.getByName("8.8.8.8"))
-                        .setMtu(1280); // Strict MTU to prevent packet fragmentation over heterogeneous Wi-Fi networks
+                        .setMtu(1280); 
 
                 Peer.Builder peerBuilder = new Peer.Builder()
                         .setPublicKey(Key.fromBase64(SERVER_PUBKEY))
                         .setEndpoint(InetEndpoint.parse(serverIp + ":" + serverPort))
                         .addAllowedIp(InetNetwork.parse("0.0.0.0/0"))
                         .addAllowedIp(InetNetwork.parse("::/0"))
-                        .setPersistentKeepalive(15); // Maintain UDP NAT Mapping active
+                        .setPersistentKeepalive(15); 
 
                 Config config = new Config.Builder()
                         .setInterface(ifaceBuilder.build())
@@ -88,7 +88,7 @@ public class MyVpnService extends VpnService implements Tunnel {
             }
         }).start();
 
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
 
     private void stopVpnInternal() {
@@ -111,7 +111,7 @@ public class MyVpnService extends VpnService implements Tunnel {
 
     @Override
     public void onStateChange(State newState) {
-        Log.i(TAG, "Aegis Security Tunnel State Changed: " + newState);
+        Log.i(TAG, "Shield Security Tunnel State Changed: " + newState);
     }
 
     private Notification createNotification() {
@@ -125,7 +125,7 @@ public class MyVpnService extends VpnService implements Tunnel {
                 PendingIntent.FLAG_IMMUTABLE);
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("AEGIS SENTINEL: Active Shield")
+                .setContentTitle("SHIELD AI: Active Protection")
                 .setContentText("Traffic encrypted and routed via Secure Node Gateway.")
                 .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -139,10 +139,10 @@ public class MyVpnService extends VpnService implements Tunnel {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
-                    "Aegis Shield Service",
+                    "Shield VPN Service",
                     NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Shows active Aegis Sentinel encryption status");
+            channel.setDescription("Shows active Shield AI encryption status");
             getSystemService(NotificationManager.class).createNotificationChannel(channel);
         }
     }

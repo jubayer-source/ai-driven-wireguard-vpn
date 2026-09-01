@@ -73,13 +73,13 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:background="@null"
-            android:hint="192.168.50.203"
+            android:hint="192.168.68.67"
             android:textColorHint="#40FFFFFF"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:fontFamily="monospace"
             android:inputType="textUri"
-            android:text="192.168.50.203" />
+            android:text="192.168.50.252" />
     </LinearLayout>
 
     <!-- Core Status Radar Card -->

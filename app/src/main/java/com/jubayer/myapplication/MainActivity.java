@@ -29,7 +29,7 @@ import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
     private static final String DEFAULT_HOTSPOT_PUBLIC_IP = "42.0.7.221";
-    private static final String DEFAULT_LOCAL_LAN_IP = "192.168.50.203";
+    private static final String DEFAULT_LOCAL_LAN_IP = "192.168.68.67";
     private static final int SERVER_PORT = 51820;
 
     private TextView tvStatus, tvAiReason, tvPingVal, tvNetworkVal, tvRealIp, tvVpnIp, tvLocation, tvTimer;
@@ -149,7 +149,7 @@ public class MainActivity extends AppCompatActivity {
             lottieScan.playAnimation();
         }
 
-        tvStatus.setText("AEGIS INTELLIGENCE SCAN...");
+        tvStatus.setText("SHIELD AI SCANNING...");
         tvStatus.setTextColor(Color.parseColor("#00E5FF"));
 
         new Thread(() -> {
@@ -245,7 +245,7 @@ public class MainActivity extends AppCompatActivity {
                 if (fetchedIp != null && !fetchedIp.equals("Unresolved")) {
                     tvVpnIp.setText(fetchedIp);
                     tvVpnIp.setTextColor(Color.parseColor("#00E676"));
-                    tvLocation.setText("Aegis Secure Node (" + currentIp + ")");
+                    tvLocation.setText("Shield Secure Node (" + currentIp + ")");
                 } else {
                     pollVpnIp(attempt + 1, currentIp);
                 }
