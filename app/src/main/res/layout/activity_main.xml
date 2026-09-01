@@ -4,47 +4,95 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#07090E"
+    android:background="#050811"
     tools:context=".MainActivity">
 
+    <!-- Cyber Header -->
     <LinearLayout
         android:id="@+id/header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="20dp"
         android:orientation="vertical"
         android:gravity="center_horizontal"
         app:layout_constraintTop_toTopOf="parent">
 
-        <TextView
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="AI DRIVEN VPN"
-            android:textColor="#00E5FF"
-            android:textSize="16sp"
-            android:letterSpacing="0.35"
-            android:textStyle="bold"/>
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:background="@drawable/bg_green_dot" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="AEGIS CYBER SENTINEL"
+                android:textColor="#00E5FF"
+                android:textSize="15sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.2"
+                android:textStyle="bold"/>
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="3dp"
             android:gravity="center"
-            android:text="Zero-Trust Autonomous Security Shield"
-            android:textColor="#80A0B0"
+            android:text="Zero-Trust Neural Cryptographic Shield"
+            android:textColor="#64748B"
             android:textSize="11sp"
             android:letterSpacing="0.05"
             android:fontFamily="sans-serif-medium"/>
+
+        <!-- Cyber Badges Row -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_metric_card"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp"
+                android:text="WIREGUARD UDP"
+                android:textColor="#7C4DFF"
+                android:fontFamily="monospace"
+                android:textSize="9sp"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_metric_card"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp"
+                android:text="CHACHA20-POLY1305"
+                android:textColor="#00E676"
+                android:fontFamily="monospace"
+                android:textSize="9sp"
+                android:textStyle="bold"/>
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- Node IP Config Card -->
+    <!-- Target Node Config Card -->
     <LinearLayout
         android:id="@+id/serverConfigLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="20dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginHorizontal="18dp"
+        android:layout_marginTop="12dp"
         android:background="@drawable/bg_metric_card"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
@@ -58,6 +106,7 @@
             android:text="TARGET NODE"
             android:textColor="#00E5FF"
             android:textSize="10sp"
+            android:fontFamily="monospace"
             android:letterSpacing="0.1"
             android:textStyle="bold" />
 
@@ -73,13 +122,13 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:background="@null"
-            android:hint="192.168.68.67"
+            android:hint="147.185.221.213"
             android:textColorHint="#40FFFFFF"
-            android:textColor="#FFFFFF"
+            android:textColor="#00E676"
             android:textSize="13sp"
             android:fontFamily="monospace"
             android:inputType="textUri"
-            android:text="192.168.68.67" />
+            android:text="147.185.221.213" />
     </LinearLayout>
 
     <!-- Core Status Radar Card -->
@@ -87,24 +136,24 @@
         android:id="@+id/statusCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="20dp"
-        android:layout_marginTop="14dp"
-        app:cardBackgroundColor="#0F131D"
-        app:cardCornerRadius="28dp"
-        app:cardElevation="2dp"
+        android:layout_marginHorizontal="18dp"
+        android:layout_marginTop="12dp"
+        app:cardBackgroundColor="#090E1A"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="0dp"
         app:layout_constraintTop_toBottomOf="@id/serverConfigLayout">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="20dp"
+            android:padding="16dp"
             android:gravity="center">
 
             <com.airbnb.lottie.LottieAnimationView
                 android:id="@+id/lottieScan"
-                android:layout_width="150dp"
-                android:layout_height="150dp"
+                android:layout_width="135dp"
+                android:layout_height="135dp"
                 app:lottie_rawRes="@raw/scanning"
                 app:lottie_autoPlay="true"
                 app:lottie_loop="true"
@@ -114,10 +163,11 @@
                 android:id="@+id/tvStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="6dp"
                 android:text="SYSTEM ARMED"
                 android:textColor="#FFFFFF"
-                android:textSize="18sp"
+                android:textSize="17sp"
+                android:fontFamily="monospace"
                 android:letterSpacing="0.15"
                 android:textStyle="bold" />
 
@@ -140,11 +190,11 @@
         android:id="@+id/ipInfoSection"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="20dp"
-        android:layout_marginTop="14dp"
+        android:layout_marginHorizontal="18dp"
+        android:layout_marginTop="10dp"
         android:background="@drawable/bg_metric_card"
         android:orientation="vertical"
-        android:padding="16dp"
+        android:padding="14dp"
         app:layout_constraintTop_toBottomOf="@id/statusCard">
 
         <LinearLayout
@@ -164,6 +214,7 @@
                     android:text="REAL GATEWAY IP"
                     android:textColor="#00E5FF"
                     android:textSize="9sp"
+                    android:fontFamily="monospace"
                     android:letterSpacing="0.1"
                     android:textStyle="bold" />
                 <TextView
@@ -188,6 +239,7 @@
                     android:text="TUNNEL IP"
                     android:textColor="#00E5FF"
                     android:textSize="9sp"
+                    android:fontFamily="monospace"
                     android:letterSpacing="0.1"
                     android:textStyle="bold" />
                 <TextView
@@ -206,7 +258,7 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#15FFFFFF"
-            android:layout_marginVertical="10dp" />
+            android:layout_marginVertical="8dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -218,6 +270,7 @@
                 android:text="GATEWAY NODE: "
                 android:textColor="#00E5FF"
                 android:textSize="9sp"
+                android:fontFamily="monospace"
                 android:letterSpacing="0.1"
                 android:textStyle="bold" />
             <TextView
@@ -225,7 +278,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Local Subnet Direct"
-                android:textColor="#D0D0E0"
+                android:textColor="#CBD5E1"
+                android:fontFamily="monospace"
                 android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
@@ -235,8 +289,8 @@
         android:id="@+id/metricsMatrix"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="20dp"
-        android:layout_marginTop="10dp"
+        android:layout_marginHorizontal="18dp"
+        android:layout_marginTop="8dp"
         android:orientation="horizontal"
         app:layout_constraintTop_toBottomOf="@id/ipInfoSection">
 
@@ -244,16 +298,17 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginEnd="5dp"
+            android:layout_marginEnd="4dp"
             android:background="@drawable/bg_metric_card"
             android:orientation="vertical"
-            android:padding="12dp">
+            android:padding="11dp">
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="LATENCY"
                 android:textColor="#00E5FF"
                 android:textSize="9sp"
+                android:fontFamily="monospace"
                 android:letterSpacing="0.1"
                 android:textStyle="bold"/>
             <TextView
@@ -262,7 +317,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="-- ms"
-                android:textColor="#FFFFFF"
+                android:textColor="#00E676"
                 android:fontFamily="monospace"
                 android:textSize="14sp"
                 android:textStyle="bold"/>
@@ -272,16 +327,17 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="5dp"
+            android:layout_marginStart="4dp"
             android:background="@drawable/bg_metric_card"
             android:orientation="vertical"
-            android:padding="12dp">
+            android:padding="11dp">
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="NETWORK TYPE"
                 android:textColor="#00E5FF"
                 android:textSize="9sp"
+                android:fontFamily="monospace"
                 android:letterSpacing="0.1"
                 android:textStyle="bold"/>
             <TextView
@@ -291,7 +347,8 @@
                 android:layout_marginTop="2dp"
                 android:text="Initializing..."
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:textSize="11sp"
                 android:maxLines="1"
                 android:ellipsize="end"
                 android:textStyle="bold"/>
@@ -303,11 +360,11 @@
         android:id="@+id/aiConsole"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="20dp"
-        android:layout_marginTop="10dp"
+        android:layout_marginHorizontal="18dp"
+        android:layout_marginTop="8dp"
         android:background="@drawable/bg_metric_card"
         android:orientation="vertical"
-        android:padding="14dp"
+        android:padding="12dp"
         app:layout_constraintTop_toBottomOf="@id/metricsMatrix">
 
         <LinearLayout
@@ -325,39 +382,51 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:text="GEMINI AI ORCHESTRATION ENGINE"
+                android:text="NEURAL INTELLIGENCE MATRIX"
                 android:textColor="#00E5FF"
                 android:textSize="9sp"
+                android:fontFamily="monospace"
                 android:letterSpacing="0.15"
                 android:textStyle="bold" />
         </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Automated network threat evaluation &amp; tunnel routing"
+            android:textColor="#64748B"
+            android:textSize="9sp"
+            android:fontFamily="sans-serif-medium" />
 
         <TextView
             android:id="@+id/tvAiReason"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:text="Monitoring local interfaces for transport vulnerabilities..."
-            android:textColor="#C0C8D8"
+            android:text="[SENTINEL]: Monitoring local interfaces for transport vulnerabilities..."
+            android:textColor="#00E676"
+            android:fontFamily="monospace"
             android:textSize="11sp"
-            android:lineSpacingExtra="3dp" />
+            android:lineSpacingExtra="2dp" />
     </LinearLayout>
 
     <!-- Control Button -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnToggleVpn"
         android:layout_width="match_parent"
-        android:layout_height="60dp"
-        android:layout_marginHorizontal="20dp"
-        android:layout_marginBottom="20dp"
+        android:layout_height="56dp"
+        android:layout_marginHorizontal="18dp"
+        android:layout_marginBottom="16dp"
         android:text="SECURE CONNECTION"
-        android:textColor="#07090E"
+        android:textColor="#050811"
         android:textSize="14sp"
+        android:fontFamily="monospace"
         android:textStyle="bold"
         android:letterSpacing="0.15"
         app:backgroundTint="#00E5FF"
-        app:cornerRadius="18dp"
-        app:elevation="6dp"
+        app:cornerRadius="16dp"
+        app:elevation="4dp"
         app:rippleColor="#4DFFFFFF"
         app:layout_constraintBottom_toBottomOf="parent" />
 

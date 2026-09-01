@@ -107,7 +107,7 @@ public class GeminiNetworkOrchestrator {
                         JSONObject result = new JSONObject(cleanJson);
 
                         boolean connect = result.optBoolean("connect", true);
-                        String reason = "Gemini Sentinel: " + result.optString("reason", "Analysis complete.");
+                        String reason = "Cyber Sentinel: " + result.optString("reason", "Analysis complete.");
                         int confidence = result.optInt("confidence", 92);
 
                         mainHandler.post(() -> callback.onResult(connect, reason, confidence));
